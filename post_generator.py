@@ -1,4 +1,8 @@
-from llm_helper import llm
+import os
+
+from langchain_groq import ChatGroq
+
+from llm_helper import llm, FALLBACK_MODELS
 from few_shot import FewShotPosts
 
 few_shot = FewShotPosts()
@@ -15,8 +19,27 @@ def get_length_str(length):
 
 def generate_post(length, language, tag):
     prompt = get_prompt(length, language, tag)
-    response = llm.invoke(prompt)
-    return response.content
+
+    try:
+        response = llm.invoke(prompt)
+        return response.content
+    except Exception:
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            raise
+
+        seen = {llm.model_name}
+        for model_name in FALLBACK_MODELS:
+            if model_name in seen:
+                continue
+            try:
+                fallback_llm = ChatGroq(api_key=api_key, model=model_name)
+                response = fallback_llm.invoke(prompt)
+                return response.content
+            except Exception:
+                continue
+
+        raise
 
 
 def get_prompt(length, language, tag):
